@@ -2,11 +2,16 @@
 # coding: utf-8
 #Backtest de setups
 #Criado por: Felipe Muller 
-#Versão 0.30
+#Versão 0.31
 
-#2022-05-27 - 0.11 -> Adicionado a coluna Entrada
-#2022-10-11 - 0.20 -> Adicionado os calculos de TradeStart/TradeEnd/Trade
-#2022-10-13   0.30 -> Testes iniciais
+
+#2022-05-27     0.11 -> Adicionado a coluna Entrada
+#2022-10-11     0.20 -> Adicionado os calculos de TradeStart/TradeEnd/Trade
+#2022-10-13     0.30 -> Testes iniciais
+#2022-10-16     0.31 -> Updated informations on graph
+#               0.32 -> Added Retorno == "trades"
+
+
 # In[3]:
 
 import pandas as pd
@@ -69,7 +74,6 @@ def Backtest_getdata(ticker, startdate, enddate, timeframe, source="yahoo"):
     df.drop(columns=['Date_New', 'Day'], axis=1, inplace=True)
     
     return df
-
 
 def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora,CustoB3,Impostos,
              Filtro0,Filtro1,Filtro2,Filtro3,Filtro4,
@@ -454,6 +458,12 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
     if Retorno.lower()=="table":
         return df
     
+    elif (Retorno.lower()=="trades"):
+        pattern = ['Buy','Sell']
+        trades = df.loc[df.Trade.str.contains('|'.join(pattern)),:]
+        
+        return trades
+    
     elif (Retorno.lower() == 'summary') or (Retorno.lower() == 'row'):
             Entrada=EntradaPriceType+';'+EntradaPriceValue+';'+str(EntradaPriceCandles)+';'+EntradaPriceDiffType.upper()+';'+str(EntradaPriceDiffValue)
             #EntradaCandlesStandby
@@ -646,41 +656,49 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
         except:
             annot=annot.copy()
 
-        fig = make_subplots(rows=3, cols=1
+        fig = make_subplots(rows=4, cols=1
                             , shared_xaxes=True
                             ,vertical_spacing=0.01
-                            , row_width=[0.25, 0.25, 0.5])
+                            , row_width=[0.22, 0.2, 0.20, 0.4])
 
-        fig.append_trace(go.Candlestick(x=df.index,
-                    open=df['Open'],
-                    high=df['High'],
-                    low=df['Low'],
-                    close=df['Close']
+        fig.append_trace(go.Candlestick(x=df.index
+                    , open=df['Open']
+                    , high=df['High']
+                    , low=df['Low']
+                    , close=df['Close']
+                    , name = "Candlesticks"
                     , increasing_line_color= 'black', decreasing_line_color= 'black'
                     , increasing_line_width= 1, decreasing_line_width= 1
                     , increasing_fillcolor= 'white', decreasing_fillcolor= 'black'
-                                       )
                     , row = 1 , col = 1,
-                    )
+                    ))
 
-        fig.append_trace(go.Scatter(x=df.index, y=df.TakeProfit, line=dict(color='orange', width=1))
+        fig.append_trace(go.Scatter(x=df.index, y=df.TakeProfit, name = 'TakeProfit', line=dict(color='orange', width=1))
                          , row=1, col=1)
 
         fig.append_trace(go.Scatter(
-                x=df.index,
-                y=df['PercAcum']*100,
+                x = df.index,
+                y = df['PercAcum']*100,
+                name = 'Percentual Acumulado(%)' 
             ), row=2, col=1)              
 
         if (TradeSystem.lower()=="legadofinanceiro") or (TradeSystem.lower()=="lf"): 
             fig.append_trace(go.Scatter(
                     x=df.index,
                     y=df['LucroAcoesAcum'],
+                    name = 'Lucros em Ações Acumulado'
                 ), row=3, col=1)
         else:
             fig.append_trace(go.Scatter(
                     x=df.index,
                     y=df['Caixa'],
                 ), row=3, col=1)
+
+        fig.append_trace(go.Scatter(
+            x = df.index,
+            y = df['Drawdown']*100,
+            name = 'Drawdown(%)' 
+        ), row=4, col=1)              
 
         #Buy
         i=0
