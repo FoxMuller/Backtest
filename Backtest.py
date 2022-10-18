@@ -2,7 +2,7 @@
 # coding: utf-8
 #Backtest de setups
 #Criado por: Felipe Muller 
-#Versão 0.31
+#Versão 0.43
 
 
 #2022-05-27     0.11 -> Adicionado a coluna Entrada
@@ -11,9 +11,10 @@
 #2022-10-16     0.31 -> Updated informations on graph
 #               0.32 -> Added Retorno == "trades"
 #               0.33 -> Added Graph_save
-
-
-# In[3]:
+#2022-10-18     0.4 -> Reorganized if / else / elif on Entrada/TakeProfit/StopLoss
+#               0.41 -> StopLoss value "None" created
+#               0.42 -> Abv/Asc Better code
+#               0.43 -> Added StopLossFixed
 
 import pandas as pd
 import numpy as np
@@ -81,7 +82,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
              TradeSystem, Setup,EntradaPriceType,EntradaPriceValue,EntradaPriceCandles,EntradaPriceDiffType,EntradaPriceDiffValue,
              EntradaCandlesStandby
              , TakeProfitType,TakeProfitValueCandle,TakeProfitValue,TakeProfitPriceDiffType,TakeProfitPriceDiffValue
-             , StopLossType,StopLossValueCandle,StopLossValue,StopLossPriceDiffType,StopLossPriceDiffValue
+             , StopLossType,StopLossValueCandle,StopLossValue,StopLossFixed,StopLossPriceDiffType,StopLossPriceDiffValue
              ,Tempo,Retorno) :
     
     def round_to_lower(number, multiple):
@@ -118,72 +119,74 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
         
     #TradeSetup
     df_ctf['Setup']=1
-        
-    #Calculo da Entrada
     df_ctf['Entrada']=0.0
-    for i in range(df_ctf.shape[0]):
-        if i<EntradaPriceCandles:
-            df_ctf['Entrada'][i]=float("nan")
-        else:
-            if (EntradaPriceType.lower()=="highest"):
-                df_ctf['Entrada'][i]=df_ctf[EntradaPriceValue].iloc[i-EntradaPriceCandles+1:i+1].max()
-            elif (EntradaPriceType.lower()=="lowest"):
-                df_ctf['Entrada'][i]=df_ctf[EntradaPriceValue].iloc[i-EntradaPriceCandles+1:i+1].min()
+    df_ctf['TakeProfit']=0.0
+    df_ctf['StopLoss']=0.0
+        
+    #Calculos
+    if (EntradaPriceType.lower()=="highest") | (EntradaPriceType.lower()=="lowest") | (TakeProfitType.lower()=="highest") | (TakeProfitType.lower()=="lowest") | (StopLossType.lower()=="highest") | (StopLossType.lower()=="highest"):
+        for i in range(df_ctf.shape[0]):
+            #Entrada
+            if i<EntradaPriceCandles:
+                df_ctf['Entrada'][i]=float("nan")
+            else:
+                if (EntradaPriceType.lower()=="highest"):
+                    df_ctf['Entrada'][i]=df_ctf[EntradaPriceValue].iloc[i-EntradaPriceCandles+1:i+1].max()
+                elif (EntradaPriceType.lower()=="lowest"):
+                    df_ctf['Entrada'][i]=df_ctf[EntradaPriceValue].iloc[i-EntradaPriceCandles+1:i+1].min()
                 
+            #TakeProfit
+            if i<TakeProfitValue:
+                df_ctf['TakeProfit'][i]=float("nan")
+            else:
+                if (TakeProfitType.lower()=="highest"):
+                    df_ctf['TakeProfit'][i]=df_ctf[TakeProfitValueCandle].iloc[i-TakeProfitValue:i+1].max()
+                elif (TakeProfitType.lower()=="lowest"):
+                    df_ctf['TakeProfit'][i]=df_ctf[TakeProfitValueCandle].iloc[i-TakeProfitValue:i+1].min()
+            #StopLoss
+            if StopLossType.lower()=="none":
+                df_ctf['StopLoss']=0.0
+            else:    
+                try:
+                    if i<StopLossValue:
+                        df_ctf['StopLoss'][i]=0
+                    else:
+                        if (StopLossType.lower()=="highest"):
+                            df_ctf['StopLoss'][i]=df_ctf[StopLossValueCandle].iloc[i-StopLossValue:i+1].max()
+                        elif (StopLossType.lower()=="lowest"):
+                            df_ctf['StopLoss'][i]=df_ctf[StopLossValueCandle].iloc[i-StopLossValue:i+1].min()
+                except:
+                    df_ctf['StopLoss'][i]=0
+            
+    #Entrada            
     if EntradaPriceType.lower()=="sma":
         df_ctf['Entrada']=ta.trend.SMAIndicator(df_ctf[EntradaPriceValue],window=int(EntradaPriceCandles)).sma_indicator()
-    
     if EntradaPriceDiffType.lower()=="f":
         df_ctf["Entrada"]=round(df_ctf["Entrada"]+EntradaPriceDiffValue,2)
     elif EntradaPriceDiffType.lower()=="p":
-        df_ctf["Entrada"]=round((1+EntradaPriceDiffValue/100)*df_ctf["Entrada"],2)
-        
+        df_ctf["Entrada"]=round((1+EntradaPriceDiffValue/100)*df_ctf["Entrada"],2)     
     df_ctf["Entrada"]=df_ctf["Entrada"].shift(1)  
 
-    #Calculo TakeProfit
-    df_ctf['TakeProfit']=0.0
-    for i in range(df_ctf.shape[0]):
-        if i<TakeProfitValue:
-            df_ctf['TakeProfit'][i]=float("nan")
-        else:
-            if (TakeProfitType.lower()=="highest"):
-                df_ctf['TakeProfit'][i]=df_ctf[TakeProfitValueCandle].iloc[i-TakeProfitValue:i+1].max()
-            elif (TakeProfitType.lower()=="lowest"):
-                df_ctf['TakeProfit'][i]=df_ctf[TakeProfitValueCandle].iloc[i-TakeProfitValue:i+1].min()
-                
+    #Calculo TakeProfit   
     if TakeProfitType.lower()=="sma":
         df_ctf['TakeProfit']=ta.trend.SMAIndicator(df_ctf[TakeProfitValueCandle],window=int(TakeProfitValue)).sma_indicator()
-    
     if TakeProfitPriceDiffType.lower()=="f":
         df_ctf["TakeProfit"]=round(df_ctf["TakeProfit"]+TakeProfitPriceDiffValue,2)
     elif TakeProfitPriceDiffType.lower()=="p":
         df_ctf["TakeProfit"]=round((1+TakeProfitPriceDiffValue/100)*df_ctf["TakeProfit"],2)
-    
     df_ctf["TakeProfit"]=df_ctf["TakeProfit"].shift(1)
     
     #Calculo StopLoss
-    df_ctf['StopLoss']=0.0
-    for i in range(df_ctf.shape[0]):
-        try:
-            if i<StopLossValue:
-                df_ctf['StopLoss'][i]=0
-            else:
-                if (StopLossType.lower()=="highest"):
-                    df_ctf['StopLoss'][i]=df_ctf[StopLossValueCandle].iloc[i-StopLossValue:i+1].max()
-                elif (StopLossType.lower()=="lowest"):
-                    df_ctf['StopLoss'][i]=df_ctf[StopLossValueCandle].iloc[i-StopLossValue:i+1].min()
-        except:
-            df_ctf['StopLoss'][i]=0
-            
-    if StopLossType.lower()=="sma":
-        df_ctf['StopLoss']=ta.trend.SMAIndicator(df_ctf[StopLossValueCandle],window=int(StopLossValue)).sma_indicator()
-    
-    if StopLossPriceDiffType.lower()=="f":
-        df_ctf["StopLoss"]=round(df_ctf["StopLoss"]+StopLossPriceDiffValue,2)
-    elif StopLossPriceDiffType.lower()=="p":
-        df_ctf["StopLoss"]=round((1+StopLossPriceDiffValue/100)*df_ctf["StopLoss"],2)
-    
-    df_ctf["StopLoss"]=df_ctf["StopLoss"].shift(1)
+    if StopLossType.lower()=="none":
+        df_ctf['StopLoss']=0.0
+    else:          
+        if StopLossType.lower()=="sma":
+            df_ctf['StopLoss']=ta.trend.SMAIndicator(df_ctf[StopLossValueCandle],window=int(StopLossValue)).sma_indicator()
+        if StopLossPriceDiffType.lower()=="f":
+            df_ctf["StopLoss"]=round(df_ctf["StopLoss"]+StopLossPriceDiffValue,2)
+        elif StopLossPriceDiffType.lower()=="p":
+            df_ctf["StopLoss"]=round((1+StopLossPriceDiffValue/100)*df_ctf["StopLoss"],2)
+        df_ctf["StopLoss"]=df_ctf["StopLoss"].shift(1)
     
     
     
@@ -203,25 +206,25 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
             df_ctf["Filtro"+str(f)+"Cond"]="True"
             df_tfa["Filtro"+str(f)]=""
             df_tfa["Filtro"+str(f)+"Cond"]="True"
-            if (FiltroSplit[2]=="CTF"):
-                if (FiltroSplit[0]=="SMA") | (FiltroSplit[0]=="EMA"): 
-                    if (FiltroSplit[0]=="SMA"):
+            if (FiltroSplit[2].lower()=="ctf"):
+                if (FiltroSplit[0].lower()=="sma") | (FiltroSplit[0].lower()=="ema"): 
+                    if (FiltroSplit[0].lower()=="sma"):
                         df_ctf["Filtro"+str(f)]=ta.trend.SMAIndicator(df_ctf["Close"],window=int(FiltroSplit[1])).sma_indicator()
-                    elif(FiltroSplit[0]=="EMA"):
+                    elif(FiltroSplit[0].lower()=="ema"):
                         df_ctf["Filtro"+str(f)]=ta.trend.EMAIndicator(df_ctf["Close"],window=int(FiltroSplit[1])).ema_indicator()
-                    if (FiltroSplit[3]=="ASC"):
+                    if (FiltroSplit[3].lower()=="asc"):
                         df_ctf["Filtro"+str(f)+"Cond"]=np.where(
                                                         df_ctf["Filtro"+str(f)]>=df_ctf["Filtro"+str(f)].shift(),
                                                         True,
                                                         False
                                                         )
-                    elif (FiltroSplit[3]=="ABV"):
+                    elif (FiltroSplit[3].lower()=="abv"):
                         df_ctf["Filtro"+str(f)+"Cond"]=np.where(
                                                         df_ctf["Close"]>=df_ctf["Filtro"+str(f)],
                                                         True,
                                                         False
                                                         )
-                    elif (FiltroSplit[3]=="ASC&ABV"):
+                    elif (FiltroSplit[3].lower()=="asc&abv") | (FiltroSplit[3].lower()=="abv&asc"):
                         df_ctf["Filtro"+str(f)+"Cond"]=np.where(
                                                         ((df_ctf["Filtro"+str(f)]>=df_ctf["Filtro"+str(f)].shift())) 
                                                         & (df_ctf["Close"]>=df_ctf["Filtro"+str(f)]),
@@ -232,13 +235,13 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                 
                 if (FiltroSplit[0]=="IFR"): 
                     df_ctf["Filtro"+str(f)]=ta.momentum.RSIIndicator(df_ctf["Close"],window=int(FiltroSplit[1])).rsi()
-                    if (FiltroSplit[3]=="ASC"):
+                    if (FiltroSplit[3].lower()=="asc"):
                         df_ctf["Filtro"+str(f)+"Cond"]=np.where(
                                                         df_ctf["Filtro"+str(f)]>=df_ctf["Filtro"+str(f)].shift(),
                                                         True,
                                                         False
                                                         )
-                    elif (FiltroSplit[3]=="BTW"):
+                    elif (FiltroSplit[3].lower()=="btw"):
                         FiltroValue=FiltroSplit[4].split(",")
                         df_ctf["Filtro"+str(f)+"Cond"]=np.where(
                                                         ((df_ctf["Filtro"+str(f)]>=float(FiltroValue[0])) 
@@ -246,7 +249,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                                         , True
                                                         , False
                                                         )
-                    elif (FiltroSplit[3]=="ASC&BTW"):
+                    elif (FiltroSplit[3].lower()=="asc&btw") | (FiltroSplit[3].lower()=="btw&asc"):
                         FiltroValue=FiltroSplit[4].split(",")
                         df_ctf["Filtro"+str(f)+"Cond"]=np.where(
                                                         ((df_ctf["Filtro"+str(f)]>=df_ctf["Filtro"+str(f)].shift())
@@ -371,6 +374,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                 df_ctf['Trade'][i]="BuySellTP"
                                 df_ctf['TradeCount'][i]=1
                             elif (df_ctf['TradeStart'][i]==1000) and (df_ctf['TradeEnd'][i]==1002):
+                                #Obs.: Consider only Buy because suppose that the Candle went down before reach the takeprofit
                                 df_ctf['Trade'][i]="Buy"
                                 df_ctf['TradeCount'][i]=1
                             elif (df_ctf['TradeStart'][i]==1000) and (Tempo==1):
@@ -380,7 +384,10 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                 df_ctf['Trade'][i]="Buy"
                                 df_ctf['TradeCount'][i]=1
                     if (df_ctf['Trade'][i-1]=="Buy") or (df_ctf['Trade'][i-1]=="Hold"):
-                        if (df_ctf['TradeEnd'][i]==1001):
+                        if (StopLossFixed==True):
+                            df_ctf['StopLoss'][i]=df_ctf['StopLoss'][i-1]
+                        if ((df_ctf['High'][i]>=df_ctf['StopLoss'][i]) & (df_ctf['Low'][i]<=df_ctf['StopLoss'][i])):
+                            df_ctf['TradeEnd'][i]==1001
                             df_ctf['Trade'][i]="SellSL"
                             df_ctf['TradeCount'][i]=df_ctf['TradeCount'][i-1]+1
                         elif (df_ctf['TradeEnd'][i]==1002):
@@ -392,8 +399,9 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                         else:
                             df_ctf['Trade'][i]="Hold"
                             df_ctf['TradeCount'][i]=df_ctf['TradeCount'][i-1]+1
-
+                            
                         df_ctf['Entrada'][i]=df_ctf['Entrada'][i-1]
+                        
 
                     Qty=0
                     Valor=0.
@@ -661,7 +669,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
         
         pattern = ['Buy','Sell']
         annotations = df.loc[df.Trade.str.contains('|'.join(pattern)),:]
-        annot = annotations[['Trade','Entrada','TakeProfit','Close']]
+        annot = annotations[['Trade','Entrada','TakeProfit','Close','StopLoss']]
         annot.reset_index(inplace=True)
         try:
             annot = annot.rename(columns={'Date_Start': 'Date'})
@@ -685,9 +693,16 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                     , row = 1 , col = 1
                     )
 
-        fig.append_trace(go.Scatter(x=df.index, y=df.TakeProfit, name = 'TakeProfit', line=dict(color='orange', width=1))
+        fig.append_trace(go.Scatter(x=df.index, y=df.TakeProfit, name = 'TakeProfit', line=dict(color='blue', width=1))
                          , row=1, col=1)
 
+        fig.append_trace(go.Scatter(x=df.index, y=df.Entrada, name = 'Entrada', line=dict(color='green', width=1))
+                         , row=1, col=1)
+        
+        fig.append_trace(go.Scatter(x=df.index, y=df.StopLoss, name = 'StopLoss', line=dict(color='red', width=1))
+                         , row=1, col=1)
+
+        
         fig.append_trace(go.Scatter(
                 x = df.index,
                 y = df['PercAcum']*100,
