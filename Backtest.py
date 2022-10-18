@@ -10,6 +10,7 @@
 #2022-10-13     0.30 -> Testes iniciais
 #2022-10-16     0.31 -> Updated informations on graph
 #               0.32 -> Added Retorno == "trades"
+#               0.33 -> Added Graph_save
 
 
 # In[3]:
@@ -363,8 +364,14 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                             if (df_ctf['TradeStart'][i]==1000) and (df_ctf['TradeEnd'][i]==1001):
                                 df_ctf['Trade'][i]="BuySellSL"
                                 df_ctf['TradeCount'][i]=1
-                            elif (df_ctf['TradeStart'][i]==1000) and (df_ctf['TradeEnd'][i]==1002):
+                            elif (df_ctf['TradeStart'][i]==1000) and (df_ctf['TradeEnd'][i]==1002) and (df_ctf['Close'][i]>=df_ctf['Open'][i]):
                                 df_ctf['Trade'][i]="BuySellTP"
+                                df_ctf['TradeCount'][i]=1
+                            elif (df_ctf['TradeStart'][i]==1000) and (df_ctf['TradeEnd'][i]==1002) and (df_ctf['Entrada'][i]>=df_ctf['Open'][i]):
+                                df_ctf['Trade'][i]="BuySellTP"
+                                df_ctf['TradeCount'][i]=1
+                            elif (df_ctf['TradeStart'][i]==1000) and (df_ctf['TradeEnd'][i]==1002):
+                                df_ctf['Trade'][i]="Buy"
                                 df_ctf['TradeCount'][i]=1
                             elif (df_ctf['TradeStart'][i]==1000) and (Tempo==1):
                                 df_ctf['Trade'][i]="BuySellClose"
@@ -488,6 +495,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
             MediaLossPerc = df[df['Valor']<0].mean()['Perc']
             Drawdown = df['Drawdown'].min()
             MediaCandleTrade = df[df['TradeCount']>0].count()['TradeCount']/TotalTrades
+            MediPercCandleTrade = ResulLiquidoPerc/df[df['TradeCount']>0].count()['TradeCount']
             MediaEmTrade = df[df['TradeCount']>0].count()['TradeCount']/df.shape[0]
             CaixaAtual = df['Caixa'][-1]
             LucroAcoes = df['LucroAcoesAcum'][-1]
@@ -519,6 +527,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                     , 'R$ '+real_br_money_mask(MediaLoss)
                                     , ''
                                     , round(MediaCandleTrade,2)
+                                    , ''
                                     , str(round(MediaEmTrade*100,2))+" %"
                                     , 'R$ '+real_br_money_mask(CaixaAtual)
                                     , LucroAcoes  
@@ -548,6 +557,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                     , str(round(MediaLossPerc*100,2))+" %"
                                     , str(round(Drawdown*100,2))+" %"
                                     , ''
+                                    , str(round(MediPercCandleTrade*100,2))+" %"
                                     , ''
                                     , ''
                                     , ''  
@@ -573,9 +583,9 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                     , ''
                                     , ''
                                     , ''
-                                    
-                                    ,''
+                                    , ''
                                     , '' 
+                                    , ''
                                     , ''
                                     , ''
                                     , ''
@@ -609,6 +619,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                                     , 'Media Loss'
                                                     , 'Max Drawdown'
                                                     , 'Média Candle por Trade'
+                                                    , 'Média de Porc. por candle'
                                                     , 'Tempo em Trade'
                                                     , 'Caixa Atual'
                                                     , 'Se Lucro em Ações'
@@ -638,6 +649,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                    , 'WinRate':[WinRate]
                                    , 'MediaCandleTrade':[MediaCandleTrade]
                                    , 'MediaEmTrade':[MediaEmTrade]
+                                   , 'MediaPercCandle':[MediPercCandleTrade] 
                                    , 'Drawdown':[Drawdown] 
                                    , 'CaixaAtual':[CaixaAtual]
                                    , 'LucroAcoes':[LucroAcoes]
@@ -645,7 +657,7 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                                    , 'ProFactor':[ProFactor]
                                   })
                 return row
-    elif Retorno.lower()=="graph":
+    elif (Retorno.lower()=="graph") or (Retorno.lower()=="graph_save"):
         
         pattern = ['Buy','Sell']
         annotations = df.loc[df.Trade.str.contains('|'.join(pattern)),:]
@@ -669,9 +681,9 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
                     , name = "Candlesticks"
                     , increasing_line_color= 'black', decreasing_line_color= 'black'
                     , increasing_line_width= 1, decreasing_line_width= 1
-                    , increasing_fillcolor= 'white', decreasing_fillcolor= 'black'
-                    , row = 1 , col = 1,
-                    ))
+                    , increasing_fillcolor= 'white', decreasing_fillcolor= 'black')
+                    , row = 1 , col = 1
+                    )
 
         fig.append_trace(go.Scatter(x=df.index, y=df.TakeProfit, name = 'TakeProfit', line=dict(color='orange', width=1))
                          , row=1, col=1)
@@ -841,4 +853,8 @@ def Backtest(df,TimeFrame,DataInicial,DataFinal,CaixaInicial,Lote,CustoCorretora
         fig.update(layout_xaxis_rangeslider_visible=False)
         fig.update_layout(height=1000, width=800)
         
-        return fig.show()
+        if (Retorno.lower()=="graph_save"):
+            return fig.write_image(r'C:\Users\cmtem\OneDrive\Área de Trabalho\fig1.png')
+        else:
+            return fig.show()
+        
